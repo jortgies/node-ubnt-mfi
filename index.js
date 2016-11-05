@@ -91,6 +91,45 @@ mFi.prototype._getUrl = function(url){
   })
 }
 
+mFi.prototype._setUrl = function(url, status){
+  /**********************************************************
+   * This is an abstraction of a process for getting a URL asychronously. If
+   * the server replies `unauthorized` one attempt will be made to login
+   * followed by a reattempt to get the URL.
+   ********************************/
+  var that = this //context shift imminent.
+  function setURL(){
+    /************************************
+     * This local function gets the desired URL
+     **************************************************/
+    return new Promise(function(resolve, reject){
+      request.post({
+        headers: {'content-type' : 'application/x-www-form-urlencoded'},
+        url: that._url(url),
+        body: "output=".status,
+        jar: that._J
+      }, function(e,r,b){
+        if(e) return reject(e)
+        if(r.statusCode == 200) return resolve(reformat(b))
+        reject(r.statusCode)
+      })
+    })
+  }
+  return new Promise(function(resolve, reject){
+    /**************************
+     * This promise function wraps up the local getURL function
+     * with one reattempt if the server replies with a 403 reject.
+     *************************************************************/
+    setURL().then(resolve, function(code){
+      if(code == 403){
+        that._login().then(function(){
+          setURL().then(resolve, function(){ reject('unrecoverable error') })
+        },function(){ reject('not authorized') })
+      }else reject('unrecoverable error')
+    })
+  })
+}
+
 mFi.prototype.listAdmin = function(){
   return this._getUrl('/api/v1.0/list/admin')
 }
@@ -108,6 +147,9 @@ mFi.prototype.statDevice = function(){
 }
 mFi.prototype.statSysinfo = function(){
   return this._getUrl('/api/v1.0/stat/sysinfo')
+}
+mFi.prototype.setSensor = function(id, params){
+  return this._setUrl('/api/v1.0/sensors/'+id, params)
 }
 
 /*
